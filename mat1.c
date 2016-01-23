@@ -97,6 +97,7 @@ void initMatTest(Matrix* m, int rows, int cols) {
 // A function to free the memory allocated for a Matrix
 //-----------------------------------------------------//
 void freeMat(Matrix* m) {
+	// First free all of the inner arrays, or they'll leak!
 	for (int i = 0; i < m->rows; i++) {
 		free(m->data[i]);
 	}
@@ -120,14 +121,17 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < mOut.rows; i++)
 		mOut.data[i] = malloc(mOut.cols * sizeof(float));
 	
+	//---For timing purposes---//
 	clock_t start, end;
 	double cpuTime;
 	start = clock();
+	//-------------------------//
 		
 	pthread_t thread[2];
 	pthread_attr_t attr;
 	
 	threadData.mOut = &mOut;
+	// Drop in some new threads to handle some of the work, and synchronize them with the current thread
 	int iret = pthread_create(&thread[0], &attr, runner_first, (void *) &threadData);
 	iret = pthread_create(&thread[1], &attr, runner_second, (void *) &threadData);
 	
@@ -136,10 +140,12 @@ int main(int argc, char *argv[]) {
 	iret = pthread_join(thread[0], NULL);
 	iret = pthread_join(thread[1], NULL);
 
+	//---For timing purposes---//
 	end = clock();
 	cpuTime = ((double) (end - start)) / CLOCKS_PER_SEC;
-	printf("%f\n", cpuTime);
-	
+	printf("%f seconds\n", cpuTime);
+	//-------------------------//
+
 	freeMat(&mOut);
 	freeMat(&m1);
 	freeMat(&m2);
