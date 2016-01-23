@@ -24,13 +24,30 @@ struct threadParams {
 struct threadParams threadData;
 
 //-----------------------------------------------------//
-// Drop a thread to do some of the matrix calculations.
+// Drop threads to do some of the matrix calculations.
+// The program sends out 'runners' to do some of the 
+// work.
 //-----------------------------------------------------//
-void *threadMultiply(void *threadarg) {
+void *runner_first(void *threadarg) {
 	struct threadParams *myData;
 	myData = (struct threadParams *) threadarg;
 	
-	for (int i = myData->m1->cols / 2; i < myData->m1->cols; i++) {
+	for (int i = myData->m1->cols / 3; i < 2 * (myData->m1->cols / 3); i++) {
+		for (int j = 0; j < myData->m2->rows; j++) {
+			myData->mOut->data[i][j] = 0;
+			for (int k = 0; k < myData->m1->cols; k++) {
+				myData->mOut->data[j][i] += myData->m1->data[j][k] * myData->m2->data[k][i];
+			}
+		}
+	}
+	pthread_exit(NULL);
+}
+
+void *runner_second(void *threadarg) {
+	struct threadParams *myData;
+	myData = (struct threadParams *) threadarg;
+	
+	for (int i = 2 * (myData->m1->cols / 3); i < myData->m1->cols; i++) {
 		for (int j = 0; j < myData->m2->rows; j++) {
 			myData->mOut->data[i][j] = 0;
 			for (int k = 0; k < myData->m1->cols; k++) {
@@ -47,7 +64,7 @@ void *threadMultiply(void *threadarg) {
 void multiply(Matrix* mOut, Matrix* m1, Matrix* m2) {
 		
 	// Actually multiply the matrices, element by element
-	for (int i = 0; i < m1->cols / 2; i++) {
+	for (int i = 0; i < m1->cols / 3; i++) {
 		for (int j = 0; j < m2->rows; j++) {
 			// Using add-assign, so init each element to 0
 			mOut->data[j][i] = 0;
@@ -107,15 +124,17 @@ int main(int argc, char *argv[]) {
 	double cpuTime;
 	start = clock();
 		
-	pthread_t newThread;
+	pthread_t thread[2];
 	pthread_attr_t attr;
 	
 	threadData.mOut = &mOut;
-	int iret = pthread_create(&newThread, &attr, threadMultiply, (void *) &threadData);
+	int iret = pthread_create(&thread[0], &attr, runner_first, (void *) &threadData);
+	iret = pthread_create(&thread[1], &attr, runner_second, (void *) &threadData);
 	
 	multiply(&mOut, &m1, &m2);
 	
-	iret = pthread_join(newThread, NULL);
+	iret = pthread_join(thread[0], NULL);
+	iret = pthread_join(thread[1], NULL);
 
 	end = clock();
 	cpuTime = ((double) (end - start)) / CLOCKS_PER_SEC;
