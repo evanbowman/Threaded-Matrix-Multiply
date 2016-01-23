@@ -111,7 +111,7 @@ int main(int argc, char *argv[]) {
 	pthread_attr_t attr;
 	
 	threadData.mOut = &mOut;
-	int iret = pthread_create(&newThread, NULL, threadMultiply, (void *) &threadData);
+	int iret = pthread_create(&newThread, &attr, threadMultiply, (void *) &threadData);
 	
 	multiply(&mOut, &m1, &m2);
 	
