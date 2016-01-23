@@ -3,6 +3,10 @@
 #include <pthread.h>
 #include <time.h>
 
+// NOTE: optimized for dual core processors. For threaded applications, it is a good
+// practice to drop in #cores + 1 threads, so the processor can work on a thread while
+// the other perform memory fetches
+
 //-----------------------------------------------------//
 // Define a type to hold matrix information.
 //-----------------------------------------------------//
@@ -59,7 +63,8 @@ void *runner_second(void *threadarg) {
 }
 
 //-----------------------------------------------------//
-// Now define a function to multiply two matrices.
+// Now define a function to multiply two matrices, on
+// the main thread.
 //-----------------------------------------------------//
 void multiply(Matrix* mOut, Matrix* m1, Matrix* m2) {
 		
@@ -117,8 +122,9 @@ int main(int argc, char *argv[]) {
 	mOut.cols = m2.rows;
 	
 	// Perform heap allocation based on row and column sizes
+	int i;
 	mOut.data = malloc(mOut.rows * sizeof(float *));
-	for (int i = 0; i < mOut.rows; i++)
+	for (i = 0; i < mOut.rows; i++)
 		mOut.data[i] = malloc(mOut.cols * sizeof(float));
 	
 	//---For timing purposes---//
@@ -129,16 +135,19 @@ int main(int argc, char *argv[]) {
 		
 	pthread_t thread[2];
 	pthread_attr_t attr;
+	int iret;
 	
 	threadData.mOut = &mOut;
 	// Drop in some new threads to handle some of the work, and synchronize them with the current thread
-	int iret = pthread_create(&thread[0], &attr, runner_first, (void *) &threadData);
-	iret = pthread_create(&thread[1], &attr, runner_second, (void *) &threadData);
+	for (i = 0; i < 2; i++) {
+		iret = pthread_create(&thread[i], &attr, runner_first, (void *) &threadData);
+	}
 	
 	multiply(&mOut, &m1, &m2);
 	
-	iret = pthread_join(thread[0], NULL);
-	iret = pthread_join(thread[1], NULL);
+	for (i = 0; i < 2; i++) {
+		iret = pthread_join(thread[i], NULL);
+	}
 
 	//---For timing purposes---//
 	end = clock();
