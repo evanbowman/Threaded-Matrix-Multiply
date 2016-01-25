@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <time.h>
 
+#define THRD_NUM 2
 // NOTE: optimized for dual core processors. For threaded applications, it is a good
 // practice to drop in #cores + 1 threads, so the processor can work on a thread while
 // the other perform memory fetches
@@ -16,69 +17,23 @@ typedef struct _MATRIX {
 	int cols;
 } Matrix;
 
-//-----------------------------------------------------//
-// Encapsulate thread parameters
-//-----------------------------------------------------//
-struct threadParams {
-	Matrix *m1;
-	Matrix *m2;
-	Matrix *mOut;
-};
-
-struct threadParams threadData;
+Matrix m1, m2, mOut;
 
 //-----------------------------------------------------//
 // Drop threads to do some of the matrix calculations.
 // The program sends out 'runners' to do some of the 
-// work.
+// work on 'slices' of the matrix
 //-----------------------------------------------------//
-void *runner_first(void *threadarg) {
-	struct threadParams *myData;
-	myData = (struct threadParams *) threadarg;
-	
-	for (int i = myData->m1->cols / 3; i < 2 * (myData->m1->cols / 3); i++) {
-		for (int j = 0; j < myData->m2->rows; j++) {
-			myData->mOut->data[i][j] = 0;
-			for (int k = 0; k < myData->m1->cols; k++) {
-				myData->mOut->data[j][i] += myData->m1->data[j][k] * myData->m2->data[k][i];
-			}
+void *runner(void *slice) {
+	int s = (int)slice;
+	int i, j, k;
+	for (i = (s * mOut.rows) / THRD_NUM; i < ((s+1) * mOut.cols) / THRD_NUM; i++) {  
+		for (j = 0; j < mOut.rows; j++) {
+		 	mOut.data[i][j] = 0;
+			for ( k = 0; k < mOut.rows; k++)
+	 			mOut.data[i][j] += m1.data[i][k] * m2.data[k][j];
 		}
 	}
-	pthread_exit(NULL);
-}
-
-void *runner_second(void *threadarg) {
-	struct threadParams *myData;
-	myData = (struct threadParams *) threadarg;
-	
-	for (int i = 2 * (myData->m1->cols / 3); i < myData->m1->cols; i++) {
-		for (int j = 0; j < myData->m2->rows; j++) {
-			myData->mOut->data[i][j] = 0;
-			for (int k = 0; k < myData->m1->cols; k++) {
-				myData->mOut->data[j][i] += myData->m1->data[j][k] * myData->m2->data[k][i];
-			}
-		}
-	}
-	pthread_exit(NULL);
-}
-
-//-----------------------------------------------------//
-// Now define a function to multiply two matrices, on
-// the main thread.
-//-----------------------------------------------------//
-void multiply(Matrix* mOut, Matrix* m1, Matrix* m2) {
-		
-	// Actually multiply the matrices, element by element
-	for (int i = 0; i < m1->cols / 3; i++) {
-		for (int j = 0; j < m2->rows; j++) {
-			// Using add-assign, so init each element to 0
-			mOut->data[j][i] = 0;
-			for (int k = 0; k < m1->cols; k++) {
-				mOut->data[j][i] += m1->data[j][k] * m2->data[k][i];
-			}
-		}
-	}
-	
 }
 
 //-----------------------------------------------------//
@@ -110,13 +65,9 @@ void freeMat(Matrix* m) {
 }
 
 int main(int argc, char *argv[]) {
-	Matrix m1, m2, mOut;
 	initMatTest(&m1, 1000, 1000);
 	initMatTest(&m2, 1000, 1000);
-	
-	threadData.m1 = &m1;
-	threadData.m2 = &m2;
-	
+		
 	// Initialize the output matrix with the correct number of rows and columns
 	mOut.rows = m1.cols;
 	mOut.cols = m2.rows;
@@ -133,21 +84,21 @@ int main(int argc, char *argv[]) {
 	start = clock();
 	//-------------------------//
 		
-	pthread_t thread[2];
-	pthread_attr_t attr;
-	int iret;
-	
-	threadData.mOut = &mOut;
-	// Drop in some new threads to handle some of the work, and synchronize them with the current thread
-	for (i = 0; i < 2; i++) {
-		iret = pthread_create(&thread[i], &attr, runner_first, (void *) &threadData);
+	pthread_t *threads = (pthread_t*) malloc(THRD_NUM * sizeof(pthread_t));
+	//pthread_attr_t attr;
+	// Drop in some threads to do work on the matrix
+	for (i = 1; i < THRD_NUM; i++) {
+		pthread_create (&threads[i], NULL, runner, (void*) i);
 	}
 	
-	multiply(&mOut, &m1, &m2);
-	
-	for (i = 0; i < 2; i++) {
-		iret = pthread_join(thread[i], NULL);
+	// On the current thread start working on the first slice
+	runner(0);
+		
+	for (i = 0; i < THRD_NUM; i++) {
+		pthread_join(threads[i], NULL);
 	}
+	free(threads);
+	
 
 	//---For timing purposes---//
 	end = clock();
