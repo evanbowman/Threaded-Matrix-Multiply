@@ -27,11 +27,12 @@ Matrix m1, m2, mOut;
 void *runner(void *slice) {
 	int s = (int)slice;
 	int i, j, k;
-	for (i = (s * mOut.rows) / THRD_NUM; i < ((s+1) * mOut.cols) / THRD_NUM; i++) {  
-		for (j = 0; j < mOut.rows; j++) {
-		 	mOut.data[i][j] = 0;
-			for ( k = 0; k < mOut.rows; k++)
-	 			mOut.data[i][j] += m1.data[i][k] * m2.data[k][j];
+	double r;
+	for (k = (s * mOut.rows) / THRD_NUM; k < ((s+1) * mOut.cols) / THRD_NUM; k++) {  
+		for (i = 0; i < mOut.rows; i++) {
+		 	r = m1.data[i][k];
+			for (j = 0; j < mOut.rows; j++)
+	 			mOut.data[i][j] += r * m2.data[k][j];
 		}
 	}
 }
@@ -105,7 +106,7 @@ int main(int argc, char *argv[]) {
 	cpuTime = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("%f seconds\n", cpuTime);
 	//-------------------------//
-
+	
 	freeMat(&mOut);
 	freeMat(&m1);
 	freeMat(&m2);
